@@ -78,4 +78,42 @@ Input, Output, Example, Limitations)
 
 (Repeat for CU-02 to CU-06, then AD-01 to AD-06)
 
+## 4. Project Scope
+
+### 4.1 In Scope (MVP)
+
+- Customer: product questions, search, stock check, order tracking,
+  cancellation request, complaints
+- Admin: product management, inventory, orders view, complaints,
+  cancellation approval, monitoring
+- React frontend, FastAPI backend, PostgreSQL, Redis
+- Five AI agents with LangGraph, RAG with vector DB
+- JWT authentication with customer and admin roles
+- Deployment on a PaaS with a public URL
+
+### 4.2 Out of Scope
+
+- Real payment gateway
+- Real courier integration (mock shipping data used)
+- Multi-language support
+- Voice input
+- Mobile app
+- Email/SMS notifications
+
+## 5. Functional Requirements
+
+(FR-01 ते FR-17 चा तक्ता इथे टाका)
+
+## 6. Non-Functional Requirements
+
+(NFR-01 ते NFR-08 चा तक्ता इथे टाका)
+
+## 7. Assumptions and Risks
+
+(Assumptions ची यादी आणि Risks चा तक्ता इथे टाका)
+
+## 8. Success Criteria
+
+(Checklist इथे टाका)
+
 > Status: Draft
