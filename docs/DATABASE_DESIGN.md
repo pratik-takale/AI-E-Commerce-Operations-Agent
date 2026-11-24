@@ -364,7 +364,7 @@ Seed data for development and demo:
 | Chat                        | conversations, messages, agent_logs       |
 | Monitor operations          | orders, complaints, inventory, agent_logs |
 
-## 11. Day 2 Implementation Notes
+## Implementation Notes
 
 The implemented schema simplifies the original design:
 
