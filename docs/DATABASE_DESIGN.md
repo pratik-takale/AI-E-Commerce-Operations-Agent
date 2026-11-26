@@ -380,3 +380,21 @@ The implemented schema simplifies the original design:
 - All sample rows are flagged `is_demo = true` and labelled "[DEMO DATA]".
   They are sample data, not real retailer inventory.
 - Seed script: `backend/scripts/seed.py`.
+
+
+
+### 1. Order Status Update
+- The `orders.status` field now supports `processing` status.
+- No new database migration is required.
+
+### 2. Cancellation Requests
+- Cancellation requests are stored in the `support_tickets` table.
+- The `ticket_type` value is `cancellation`.
+- Cancellation requests can have statuses such as `pending_approval`.
+
+### 3. Database Verification
+Verified using PostgreSQL:
+
+```sql
+SELECT id, order_id, ticket_type, status
+FROM support_tickets;

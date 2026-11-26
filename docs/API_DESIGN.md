@@ -456,3 +456,27 @@ sequenceDiagram
 - DELETE is a soft delete (`is_active = false`).
 - Admin-only protection will be added with authentication; until then these endpoints are open (development only).
 - Errors currently use FastAPI's default `{"detail": "..."}` format.
+
+## 12. Implementation Notes
+
+- Orders: `POST /orders`, `GET /orders/{id}`, `GET /orders/user/{user_id}`,
+  `PATCH /orders/{id}/status`, `POST /orders/{id}/cancel`
+- `user_id` is sent in the body until authentication is added.
+- Order total is calculated on the backend from database prices.
+- Order creation, item creation and stock deduction run in one transaction
+  with row locks on inventory.
+- Business errors use `{"detail": {"code": "...", "message": "..."}}`.
+
+### Cancellation rules
+
+| Order status | Result |
+|--------------|--------|
+| pending, confirmed | Cancelled immediately, stock restored |
+| processing, shipped | Cancellation request (support_tickets, `pending_approval`); admin approves via status update to `cancelled` |
+| delivered | Rejected: 400 `CANCEL_NOT_ALLOWED`; use return/refund |
+| cancelled | Rejected: 400 `ALREADY_CANCELLED` |
+| request already open | Rejected: 400 `CANCELLATION_ALREADY_REQUESTED` |
+
+Status flow: pending -> confirmed -> processing -> shipped -> delivered.
+Cancelled is allowed from every state except delivered. Delivered and
+cancelled are final.
