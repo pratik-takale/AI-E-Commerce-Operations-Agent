@@ -11,10 +11,10 @@ class Settings(BaseSettings):
     DATABASE_URL: str
     REDIS_URL: str = "redis://localhost:6379/0"
 
-    # Security (Day 4 मध्ये वापरू)
+    # Security 
     SECRET_KEY: str = "change-me-in-real-use"
 
-    # Frontend ला परवानगी (CORS), commas ने वेगळे
+    
     CORS_ORIGINS: str = "http://localhost:5173,http://localhost:3000"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")

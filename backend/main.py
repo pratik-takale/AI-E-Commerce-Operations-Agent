@@ -7,14 +7,14 @@ from app.api.routes import auth, chat, inventory, orders, products
 from app.config import settings
 from app.database import get_db
 
-# Swagger मध्ये गट कसे दिसतील
+# Swagger 
 tags_metadata = [
-    {"name": "Health", "description": "Server आणि database चालू आहे का तपासा"},
-    {"name": "Auth", "description": "Login आणि registration"},
-    {"name": "Products", "description": "Products ची यादी आणि search"},
-    {"name": "Inventory", "description": "Stock तपासणी आणि update"},
-    {"name": "Orders", "description": "Orders आणि tracking"},
-    {"name": "Chat", "description": "AI agents शी संवाद"},
+    {"name": "Health", "description": "Server and database "},
+    {"name": "Auth", "description": "Login and registration"},
+    {"name": "Products", "description": "Products and search"},
+    {"name": "Inventory", "description": "Stock  update"},
+    {"name": "Orders", "description": "Orders  tracking"},
+    {"name": "Chat", "description": "AI agents"},
 ]
 
 app = FastAPI(
@@ -27,7 +27,7 @@ app = FastAPI(
     redoc_url="/redoc",   # ReDoc
 )
 
-# React frontend ला backend शी बोलू देण्यासाठी
+# React frontend communication backend 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
@@ -51,7 +51,7 @@ def health_check_db(db: Session = Depends(get_db)):
     return {"status": "healthy", "database": "connected"}
 
 
-# सर्व routers जोडा. सर्व पत्ते /api/v1 पासून सुरू होतात.
+
 PREFIX = "/api/v1"
 app.include_router(auth.router, prefix=f"{PREFIX}/auth", tags=["Auth"])
 app.include_router(products.router, prefix=f"{PREFIX}/products", tags=["Products"])

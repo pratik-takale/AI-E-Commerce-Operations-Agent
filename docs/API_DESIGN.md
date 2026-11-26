@@ -447,3 +447,12 @@ sequenceDiagram
 | AD-04 Handle complaints     | `GET/PATCH /admin/complaints`               |
 | AD-05 Approve cancellations | `PATCH /admin/cancellations/{id}`           |
 | AD-06 Monitor operations    | `GET /admin/stats`, `GET /admin/agent-logs` |
+
+## 11. Implementation Notes (Day 4)
+
+- Products: `GET/POST /products`, `GET/PUT/DELETE /products/{id}`
+- `GET /products` filters: `category`, `q`, `min_price`, `max_price`, `in_stock`, `page`, `page_size`
+- Inventory: `GET/PATCH /inventory/{product_id}`
+- DELETE is a soft delete (`is_active = false`).
+- Admin-only protection will be added with authentication; until then these endpoints are open (development only).
+- Errors currently use FastAPI's default `{"detail": "..."}` format.

@@ -1,8 +1,18 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from app.database import get_db
+from app.schemas.inventory import InventoryOut, InventoryUpdate
+from app.services import inventory_service
 
 router = APIRouter()
 
 
-@router.get("/ping")
-def ping():
-    return {"message": "inventory router is ready"}
+@router.get("/{product_id}", response_model=InventoryOut, summary="Check stock")
+def check_stock(product_id: int, db: Session = Depends(get_db)):
+    return inventory_service.get_inventory_status(db, product_id)
+
+
+@router.patch("/{product_id}", response_model=InventoryOut, summary="Update stock")
+def update_stock(product_id: int, body: InventoryUpdate, db: Session = Depends(get_db)):
+    return inventory_service.update_inventory(db, product_id, body)
