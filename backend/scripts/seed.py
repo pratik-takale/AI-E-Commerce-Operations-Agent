@@ -6,7 +6,7 @@ sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 import bcrypt
 
-from app.core.database import SessionLocal
+from app.database import SessionLocal
 from app.models import (
     Conversation, Document, Inventory, Message,
     Order, OrderItem, Product, SupportTicket, User,
