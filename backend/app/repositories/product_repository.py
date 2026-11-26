@@ -77,3 +77,9 @@ def update(db: Session, product: Product, data: dict) -> Product:
 def soft_delete(db: Session, product: Product) -> None:
     product.is_active = False
     db.commit()
+def get_active_by_ids(db: Session, product_ids: list[int]) -> list[Product]:
+    return (
+        db.query(Product)
+        .filter(Product.id.in_(product_ids), Product.is_active.is_(True))
+        .all()
+    )

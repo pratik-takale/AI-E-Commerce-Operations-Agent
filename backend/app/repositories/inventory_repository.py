@@ -21,3 +21,14 @@ def update(db: Session, inv: Inventory, data: dict) -> Inventory:
     db.commit()
     db.refresh(inv)
     return inv
+
+def get_many_for_update(db: Session, product_ids: list[int]) -> dict[int, Inventory]:
+    
+    rows = (
+        db.query(Inventory)
+        .filter(Inventory.product_id.in_(product_ids))
+        .order_by(Inventory.product_id)
+        .with_for_update()
+        .all()
+    )
+    return {r.product_id: r for r in rows}
