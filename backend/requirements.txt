@@ -6,3 +6,4 @@ alembic
 pydantic-settings
 pgvector
 bcrypt
+pytest
