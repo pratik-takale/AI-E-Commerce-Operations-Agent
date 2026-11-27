@@ -211,3 +211,13 @@ ai-ecommerce-ops-agent/
 ├── docs/
 └── README.md
 ```
+### Redis keys (implemented)
+
+| Key | Purpose | TTL |
+|-----|---------|-----|
+| `session:{id}` | Session owner and metadata | 30 min, extended on each message |
+| `session:{id}:messages` | Last 20 messages | 30 min, extended on each message |
+| `cache:product:{id}` | Cached product details | 60 s, deleted when product or stock changes |
+| `ratelimit:{scope}:{id}` | Request counters | 60 s |
+
+If Redis is down: cache and rate limiting are skipped, chat returns 503.

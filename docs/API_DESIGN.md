@@ -469,14 +469,27 @@ sequenceDiagram
 
 ### Cancellation rules
 
-| Order status | Result |
-|--------------|--------|
-| pending, confirmed | Cancelled immediately, stock restored |
-| processing, shipped | Cancellation request (support_tickets, `pending_approval`); admin approves via status update to `cancelled` |
-| delivered | Rejected: 400 `CANCEL_NOT_ALLOWED`; use return/refund |
-| cancelled | Rejected: 400 `ALREADY_CANCELLED` |
-| request already open | Rejected: 400 `CANCELLATION_ALREADY_REQUESTED` |
+| Order status         | Result                                                                                                      |
+| -------------------- | ----------------------------------------------------------------------------------------------------------- |
+| pending, confirmed   | Cancelled immediately, stock restored                                                                       |
+| processing, shipped  | Cancellation request (support_tickets, `pending_approval`); admin approves via status update to `cancelled` |
+| delivered            | Rejected: 400 `CANCEL_NOT_ALLOWED`; use return/refund                                                       |
+| cancelled            | Rejected: 400 `ALREADY_CANCELLED`                                                                           |
+| request already open | Rejected: 400 `CANCELLATION_ALREADY_REQUESTED`                                                              |
 
 Status flow: pending -> confirmed -> processing -> shipped -> delivered.
 Cancelled is allowed from every state except delivered. Delivered and
 cancelled are final.
+
+## 13. Implementation Notes
+
+- Auth: `POST /auth/register` (customer only), `POST /auth/login`, `GET /auth/me`
+- Token: JWT (HS256), expires in 60 minutes, sent as `Authorization: Bearer <token>`
+- Role is always read from the database, never trusted from the token
+- Public: product list and details. Logged-in: inventory read, orders, chat.
+- Admin only: product create/update/delete, inventory update, order status update
+- `user_id` for orders comes from the token (removed from the request body)
+- A customer requesting another customer's order gets 404; admin-only endpoints return 403
+- 401 = not authenticated, 403 = authenticated but not allowed, 429 = rate limited
+- Chat: `POST /chat/message`, `GET /chat/sessions/{id}/history`, `DELETE /chat/sessions/{id}`
+- Rate limits: auth 5/min per IP, chat 20/min per user
