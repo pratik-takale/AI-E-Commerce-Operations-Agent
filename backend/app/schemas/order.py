@@ -11,14 +11,12 @@ class OrderItemIn(BaseModel):
 
 
 class OrderCreate(BaseModel):
-    user_id: int = Field(gt=0, description="सध्या body मधून. Auth नंतर token मधून येईल")
     shipping_address: str = Field(min_length=10, max_length=500)
     items: list[OrderItemIn] = Field(min_length=1, max_length=20)
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "user_id": 2,
                 "shipping_address": "Demo Address, Pune, Maharashtra 411001",
                 "items": [
                     {"product_id": 2, "quantity": 2},

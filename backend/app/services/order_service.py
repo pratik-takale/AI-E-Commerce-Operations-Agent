@@ -10,6 +10,7 @@ from app.schemas.order import (
     CancelOut, CancelRequest, OrderCreate, OrderItemOut, OrderListOut,
     OrderOut, OrderSummary,
 )
+from app.services import cache_service
 from app.utils.order_status import (
     ALLOWED_TRANSITIONS, CancellationDecision, OrderStatus,
     can_transition, cancellation_decision,
@@ -17,7 +18,7 @@ from app.utils.order_status import (
 
 
 def _fail(status_code: int, code: str, message: str, **extra):
-    
+    """Raise a business error in one shape: {"detail": {"code": ..., "message": ...}}"""
     raise HTTPException(status_code=status_code, detail={"code": code, "message": message, **extra})
 
 
@@ -44,8 +45,8 @@ def _to_out(order: Order) -> OrderOut:
     )
 
 
-def _restore_stock(db: Session, order: Order) -> None:
-    
+def _restore_stock(db: Session, order: Order) -> list[int]:
+    """Put the items of a cancelled order back into stock. Returns the product ids."""
     product_ids = sorted({i.product_id for i in order.items})
     stocks = inventory_repository.get_many_for_update(db, product_ids)
     for item in order.items:
@@ -54,29 +55,30 @@ def _restore_stock(db: Session, order: Order) -> None:
             inv.quantity += item.quantity
         else:
             db.add(Inventory(product_id=item.product_id, quantity=item.quantity))
+    return product_ids
 
 
 # ---------- Create ----------
 
-def create_order(db: Session, body: OrderCreate) -> OrderOut:
-    user = db.get(User, body.user_id)
-    if not user:
+def create_order(db: Session, body: OrderCreate, user_id: int) -> OrderOut:
+    """user_id comes from the access token, never from the request body."""
+    if not db.get(User, user_id):
         _fail(404, "USER_NOT_FOUND", "User not found")
 
-    
+    # If the same product appears twice, add the quantities
     wanted: dict[int, int] = {}
     for it in body.items:
         wanted[it.product_id] = wanted.get(it.product_id, 0) + it.quantity
     ids = sorted(wanted)
 
     try:
-        # 1) Products active check
+        # 1) Products must exist and be active
         products = {p.id: p for p in product_repository.get_active_by_ids(db, ids)}
         missing = [i for i in ids if i not in products]
         if missing:
             _fail(404, "PRODUCT_NOT_FOUND", f"Products not found: {missing}")
 
-        #2
+        # 2) Lock stock rows and check availability
         stocks = inventory_repository.get_many_for_update(db, ids)
         problems = []
         for pid in ids:
@@ -88,30 +90,32 @@ def create_order(db: Session, body: OrderCreate) -> OrderOut:
         if problems:
             _fail(400, "INSUFFICIENT_STOCK", "Not enough stock", items=problems)
 
-        
+        # 3) Create the order, calculate the total on the backend, reduce stock
         order = Order(
-            user_id=body.user_id,
+            user_id=user_id,
             total_amount=Decimal("0"),
             status=OrderStatus.PENDING.value,
             shipping_address=body.shipping_address,
         )
         db.add(order)
-        db.flush()  
+        db.flush()  # get order.id
 
         total = Decimal("0")
         for pid in ids:
-            price = Decimal(str(products[pid].price))  
+            price = Decimal(str(products[pid].price))  # price always comes from the database
             qty = wanted[pid]
             total += price * qty
             db.add(OrderItem(order_id=order.id, product_id=pid, quantity=qty, unit_price=price))
             stocks[pid].quantity -= qty
         order.total_amount = total
 
-        db.commit()  
+        db.commit()  # order, items and stock are saved together
     except Exception:
-        db.rollback()  
+        db.rollback()  # any failure undoes everything
         raise
 
+    # Stock changed, so cached product data is outdated
+    cache_service.invalidate_products(ids)
     return get_order(db, order.id)
 
 
@@ -122,6 +126,15 @@ def get_order(db: Session, order_id: int) -> OrderOut:
     if not order:
         _fail(404, "ORDER_NOT_FOUND", "Order not found")
     return _to_out(order)
+
+
+def get_order_for_user(db: Session, order_id: int, user: User) -> OrderOut:
+    """Customers can read only their own orders. Admins can read any order.
+    A foreign order returns 404 so its existence is not revealed."""
+    order = get_order(db, order_id)
+    if user.role != "admin" and order.user_id != user.id:
+        _fail(404, "ORDER_NOT_FOUND", "Order not found")
+    return order
 
 
 def list_user_orders(
@@ -152,9 +165,10 @@ def list_user_orders(
     )
 
 
-# ---------- Status update (admin) ----------
+# ---------- Status update (admin only, enforced in the route) ----------
 
 def update_status(db: Session, order_id: int, new_status: OrderStatus) -> OrderOut:
+    restored_ids: list[int] = []
     try:
         order = order_repository.get_for_update(db, order_id)
         if not order:
@@ -175,7 +189,7 @@ def update_status(db: Session, order_id: int, new_status: OrderStatus) -> OrderO
             _fail(400, "INVALID_STATUS_TRANSITION", msg, allowed_next=allowed)
 
         if new_status == OrderStatus.CANCELLED:
-            _restore_stock(db, order)
+            restored_ids = _restore_stock(db, order)
             order_repository.close_pending_cancellations(db, order.id, "approved")
 
         order.status = new_status.value
@@ -184,15 +198,21 @@ def update_status(db: Session, order_id: int, new_status: OrderStatus) -> OrderO
         db.rollback()
         raise
 
+    cache_service.invalidate_products(restored_ids)
     return get_order(db, order_id)
 
 
 # ---------- Cancellation ----------
 
-def cancel_order(db: Session, order_id: int, body: CancelRequest) -> CancelOut:
+def cancel_order(db: Session, order_id: int, body: CancelRequest, user: User) -> CancelOut:
+    restored_ids: list[int] = []
     try:
         order = order_repository.get_for_update(db, order_id)
         if not order:
+            _fail(404, "ORDER_NOT_FOUND", "Order not found")
+
+        # Only the owner (or an admin) may cancel. Others get 404.
+        if user.role != "admin" and order.user_id != user.id:
             _fail(404, "ORDER_NOT_FOUND", "Order not found")
 
         current = OrderStatus(order.status)
@@ -211,9 +231,10 @@ def cancel_order(db: Session, order_id: int, body: CancelRequest) -> CancelOut:
             )
 
         if decision == CancellationDecision.DIRECT:
-            _restore_stock(db, order)
+            restored_ids = _restore_stock(db, order)
             order.status = OrderStatus.CANCELLED.value
             db.commit()
+            cache_service.invalidate_products(restored_ids)
             return CancelOut(
                 order_id=order.id,
                 result="cancelled",
@@ -221,7 +242,7 @@ def cancel_order(db: Session, order_id: int, body: CancelRequest) -> CancelOut:
                 message="Order cancelled and stock restored.",
             )
 
-      
+        # NEEDS_APPROVAL: create a request, the order itself stays unchanged
         if order_repository.find_pending_cancellation(db, order.id):
             _fail(
                 400,
