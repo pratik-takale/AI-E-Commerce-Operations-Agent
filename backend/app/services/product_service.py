@@ -7,7 +7,8 @@ from app.models import Product
 from app.repositories import product_repository
 from app.schemas.product import ProductCreate, ProductListOut, ProductOut, ProductUpdate
 from app.services.inventory_service import check_inventory
-
+from app.config import settings
+from app.services import cache_service
 
 def to_out(product: Product) -> ProductOut:
     """Database object response"""
@@ -42,19 +43,30 @@ def list_products(
         total_pages=math.ceil(total / page_size) if total else 0,
     )
 
-
 def get_product(db: Session, product_id: int) -> ProductOut:
+    key = cache_service.product_key(product_id)
+
+    # 1) Try the cache first
+    cached = cache_service.get_value(key)
+    if cached:
+        try:
+            return ProductOut.model_validate_json(cached)
+        except ValueError:
+            pass  # corrupted cache entry: ignore it and read from the database
+
+    # 2) Cache miss: read from the database and store the result
     product = product_repository.get_by_id(db, product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    return to_out(product)
+    result = to_out(product)
+    cache_service.set_value(key, result.model_dump_json(), settings.PRODUCT_CACHE_TTL_SECONDS)
+    return result
 
 
 def create_product(db: Session, body: ProductCreate) -> ProductOut:
     data = body.model_dump(exclude={"initial_stock", "reorder_level"})
     product = product_repository.create(db, data, body.initial_stock, body.reorder_level)
     return to_out(product)
-
 
 def update_product(db: Session, product_id: int, body: ProductUpdate) -> ProductOut:
     data = body.model_dump(exclude_none=True)
@@ -63,7 +75,9 @@ def update_product(db: Session, product_id: int, body: ProductUpdate) -> Product
     product = product_repository.get_by_id(db, product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    return to_out(product_repository.update(db, product, data))
+    updated = product_repository.update(db, product, data)
+    cache_service.invalidate_products([product_id])
+    return to_out(updated)
 
 
 def delete_product(db: Session, product_id: int) -> None:
@@ -71,3 +85,4 @@ def delete_product(db: Session, product_id: int) -> None:
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     product_repository.soft_delete(db, product)
+    cache_service.invalidate_products([product_id])
